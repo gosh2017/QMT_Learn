@@ -1,0 +1,7 @@
+{
+  // QMT 策略文件必须使用 GBK 编码（QMT 模型研究内置 Python 按 GBK 读取源码）。
+  // 仅对 Python 文件生效，README / doc 等 Markdown 文件仍保持 UTF-8。
+  "[python]": {
+    "files.encoding": "gbk"
+  }
+}
