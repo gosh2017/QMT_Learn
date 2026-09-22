@@ -90,7 +90,7 @@ def calc_macd(closes, fast=MACD_FAST, slow=MACD_SLOW, signal=MACD_SIGNAL):
 def _date_str(ContextInfo):
     """取当前 K 线日期字符串；timetostr 是 QMT 内置函数。"""
     try:
-        return timetostr(ContextInfo.barpos, '%Y-%m-%d')
+        return timetostr(ContextInfo.get_bar_timetag(ContextInfo.barpos), '%Y-%m-%d')
     except Exception:
         return str(ContextInfo.barpos)
 
@@ -193,13 +193,11 @@ def _profit_rate(pos, close):
 def _usable_volume(pos, my_hold_vol):
     """可卖数量：优先券商 m_nCanUseVolume（已考虑 A 股 T+1），其次用自记持仓。"""
     if pos is not None:
-        v = getattr(pos, 'm_nCanUseVolume', 0)
+        # 券商返回的可卖数量已考虑 A 股 T+1，直接采用（可能为 0）；只有取不到持仓时才退回自记持仓
         try:
-            v = int(v or 0)
-            if v > 0:
-                return v
+            return int(getattr(pos, 'm_nCanUseVolume', 0) or 0)
         except Exception:
-            pass
+            return 0
     return int(my_hold_vol or 0)
 
 
@@ -283,6 +281,7 @@ def init(ContextInfo):
     ContextInfo.my_holdings   = {}                 # 自记持仓 {代码: 数量}（下单即时更新）
     ContextInfo.peak_profit   = {}                 # 每只持仓的历史最高浮盈比例，用于回撤止盈
     ContextInfo.trade_log     = []                 # 自记成交（DEAL 取数失败时的兜底）
+    ContextInfo.warned_no_asset = False          # 是否已告警：账户资产取不到
 
     print('[init] 资金账号:', account, '| 股票池规模:', len(stock_list))
     print('[init] 参数: MA=%d, MACD=%d/%d/%d, 最多持仓=%d, 盈利回撤止盈=%.1f%%'
@@ -296,6 +295,12 @@ def handlebar(ContextInfo):
 
     # 取账户总资产（用于等权仓位计算与净值记录）
     total_asset = _get_total_asset(account)
+
+    # 账户资产取不到时告警一次，避免策略静默零成交
+    if total_asset <= 0 and not getattr(ContextInfo, 'warned_no_asset', False):
+        ContextInfo.warned_no_asset = True
+        print('[handlebar] 警告：账户总资产为 0，get_trade_detail_data 可能取不到账户数据，'
+              '策略将无法买入。请检查回测资金账号，或在代码顶部 ACCOUNT_ID 填入。')
 
     # ---------- 1. 卖出判断（先卖后买，释放资金） ----------
     broker_pos = _get_positions(account)
