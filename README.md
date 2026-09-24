@@ -74,6 +74,28 @@
 - **夏普比率**：日收益率均值 / 标准差 × √252（无风险利率取 0）。
 - **胜率**：按股票代码分组、时间排序，FIFO 匹配买入→卖出，盈利平仓笔数占总平仓笔数比例。
 
+## 单元测试
+
+策略脚本依赖 QMT 内置函数，无法在 QMT 之外直接运行。`tests/` 用假实现（`FakeContextInfo` / `FakeBroker`）把 `passorder`、`get_trade_detail_data`、`get_history_data`、`timetostr` 等接口注入策略模块的命名空间，于是指标计算、信号判定、下单封装、报告导出这些逻辑都能脱离 QMT 客户端做单元测试。
+
+```bash
+pip install pytest            # 策略本身已依赖 numpy / pandas
+python -m pytest              # 运行全部用例
+python -m pytest -q           # 精简输出
+python -m pytest tests/test_signals.py    # 只跑某个文件
+```
+
+| 测试文件 | 覆盖内容 |
+|---|---|
+| `tests/test_indicators.py` | EMA / MACD 的计算正确性与边界（数据不足、常数序列、手工 EMA 链对照） |
+| `tests/test_broker_helpers.py` | 取数签名兼容、账户与持仓解析、盈亏率与可卖数量、`_buy` / `_sell` 封装 |
+| `tests/test_signals.py` | `handlebar` 的买卖信号、MACD 强弱排序、持仓名额与现金约束、T+1 限制 |
+| `tests/test_metrics.py` | 年化收益 / 最大回撤 / 夏普、FIFO 胜率、Markdown 表格、成交明细收集 |
+| `tests/test_reports.py` | 三个导出文件的落盘、编码（utf-8-sig）与内容，`stop()` 的异常兜底 |
+| `tests/test_init.py` | `init` 的账号与股票池兜底、运行时状态重置、源码 GBK 编码约定 |
+
+> 说明：策略源码为 GBK 编码，测试文件为 UTF-8。与源码对齐的中文常量（指标键名、成交字段名、买卖方向标签）集中定义在 [tests/conftest.py](tests/conftest.py) 顶部，源码里改这些名字时只需同步改那一处。
+
 ## 常见排错
 
 | 现象 | 处理 |
